@@ -7,11 +7,11 @@ const path = require('path');
 const app = express();
 const PORT = 3000;
 
-app.use(bodyParser.json());
+app.use(bodyParser.urlencoded({ extended: true })); // for form data
+app.use(bodyParser.json()); 
 app.use(cors());
 
 app.use(express.static('public'));
-
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'views', 'index.html'));
 });
@@ -30,7 +30,7 @@ app.post('/api/users', (req, res) => {
 });
 
 app.get('/api/users', (req, res) => {
-    res.json(users);
+    res.json(users.map(user => ({ username: user.username, _id: user._id })));
 });
 
 app.post('/api/users/:id/exercises', (req, res) => {
@@ -44,24 +44,46 @@ app.post('/api/users/:id/exercises', (req, res) => {
 
     const exercise = {
         username: user.username,
-        description,
+        description: description.toString(),
         duration: Number(duration),
         date: date ? new Date(date).toDateString() : new Date().toDateString(),
         _id: uuidv4()
     };
 
     exercises.push(exercise);
-    res.json(exercise);
+
+    res.json({
+        username: user.username,
+        description: exercise.description,
+        duration: exercise.duration,
+        date: exercise.date,
+        _id: user._id
+    });
 });
 
 app.get('/api/users/:id/logs', (req, res) => {
     const { id } = req.params;
+    const { from, to, limit } = req.query;
     const user = users.find(user => user._id === id);
     if (!user) {
         return res.status(404).json({ error: 'User not found' });
     }
 
-    const userExercises = exercises.filter(exercise => exercise.username === user.username);
+    let userExercises = exercises.filter(exercise => exercise.username === user.username);
+
+    if (from) {
+        const fromDate = new Date(from);
+        userExercises = userExercises.filter(exercise => new Date(exercise.date) >= fromDate);
+    }
+
+    if (to) {
+        const toDate = new Date(to);
+        userExercises = userExercises.filter(exercise => new Date(exercise.date) <= toDate);
+    }
+
+    if (limit) {
+        userExercises = userExercises.slice(0, Number(limit));
+    }
 
     const log = userExercises.map(exercise => ({
         description: exercise.description,
